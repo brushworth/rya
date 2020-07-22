@@ -21,8 +21,9 @@ package org.apache.rya.indexing.statement.metadata.matching;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
-import org.apache.rya.api.RdfCloudTripleStoreUtils;
 import org.apache.rya.api.domain.RyaIRI;
 import org.apache.rya.api.domain.RyaResource;
 import org.apache.rya.api.domain.RyaStatement;
@@ -330,12 +331,11 @@ public class StatementMetadataNode<C extends RdfCloudTripleStoreConfiguration> e
         }
 
         queryEngine = RyaQueryEngineFactory.getQueryEngine(conf);
-        final Set<Map.Entry<RyaStatement, BindingSet>> statements = new HashSet<>();
+        final SetMultimap<RyaStatement, BindingSet> statements = HashMultimap.create(bindingset.size(), 1);
         final Iterator<BindingSet> iter = bindingset.iterator();
         while (iter.hasNext()) {
             final BindingSet bs = iter.next();
-            statements.add(new RdfCloudTripleStoreUtils.CustomEntry<RyaStatement, BindingSet>(
-                    getRyaStatementFromBindings(bs), bs));
+            statements.put(getRyaStatementFromBindings(bs), bs);
         }
 
         final CloseableIteration<? extends Entry<RyaStatement, BindingSet>, RyaDAOException> iteration;

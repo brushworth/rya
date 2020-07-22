@@ -19,12 +19,6 @@ package org.apache.rya.rdftriplestore.evaluation;
  * under the License.
  */
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -56,6 +50,12 @@ import org.eclipse.rdf4j.query.parser.sparql.SPARQLParser;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class QueryJoinSelectOptimizerTest {
 
@@ -175,9 +175,7 @@ public class QueryJoinSelectOptimizerTest {
 
     arc = new AccumuloRdfConfiguration();
     arc.setTableLayoutStrategy(new TablePrefixLayoutStrategy());
-    arc.setMaxRangesForScanner(300);
     res = new ProspectorServiceEvalStatsDAO(conn, arc);
-
   }
 
   @Test

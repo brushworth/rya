@@ -18,38 +18,26 @@
  */
 package org.apache.rya.mongodb;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
-import java.io.IOException;
-import java.util.AbstractMap;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.SetMultimap;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
 import org.apache.rya.api.domain.RyaStatement;
 import org.apache.rya.api.persist.RyaDAOException;
-import org.apache.rya.api.persist.query.BatchRyaQuery;
-import org.apache.rya.api.persist.query.RyaQuery;
 import org.apache.rya.api.persist.query.RyaQueryEngine;
 import org.apache.rya.mongodb.dao.MongoDBStorageStrategy;
 import org.apache.rya.mongodb.dao.SimpleMongoDBStorageStrategy;
 import org.apache.rya.mongodb.iter.RyaStatementBindingSetCursorIterator;
-import org.apache.rya.mongodb.iter.RyaStatementCursorIterator;
 import org.bson.Document;
-import org.calrissian.mango.collect.CloseableIterable;
-import org.calrissian.mango.collect.CloseableIterables;
 import org.eclipse.rdf4j.common.iteration.CloseableIteration;
 import org.eclipse.rdf4j.query.BindingSet;
-import org.eclipse.rdf4j.query.impl.MapBindingSet;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Map.Entry;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Date: 7/17/12
@@ -71,21 +59,8 @@ public class MongoDBQueryEngine implements RyaQueryEngine<StatefulMongoDBRdfConf
     }
 
     @Override
-    public CloseableIteration<RyaStatement, RyaDAOException> query(
-            final RyaStatement stmt, final StatefulMongoDBRdfConfiguration conf)
-            throws RyaDAOException {
-        checkNotNull(stmt);
-        checkNotNull(conf);
-
-        final Entry<RyaStatement, BindingSet> entry = new AbstractMap.SimpleEntry<>(stmt, new MapBindingSet());
-        final Collection<Entry<RyaStatement, BindingSet>> collection = Collections.singleton(entry);
-
-        return new RyaStatementCursorIterator(queryWithBindingSet(collection, conf));
-    }
-
-    @Override
-    public CloseableIteration<? extends Entry<RyaStatement, BindingSet>, RyaDAOException> queryWithBindingSet(
-            final Collection<Entry<RyaStatement, BindingSet>> stmts,
+    public CloseableIteration<Entry<RyaStatement, BindingSet>, RyaDAOException> queryWithBindingSet(
+            final SetMultimap<RyaStatement, BindingSet> stmts,
             final StatefulMongoDBRdfConfiguration conf) throws RyaDAOException {
         checkNotNull(stmts);
         checkNotNull(conf);
@@ -94,7 +69,7 @@ public class MongoDBQueryEngine implements RyaQueryEngine<StatefulMongoDBRdfConf
 
         //TODO: cannot span multiple tables here
         try {
-            for (final Map.Entry<RyaStatement, BindingSet> stmtbs : stmts) {
+            for (final Map.Entry<RyaStatement, BindingSet> stmtbs : stmts.entries()) {
                 final RyaStatement stmt = stmtbs.getKey();
                 final BindingSet bs = stmtbs.getValue();
                 rangeMap.put(stmt, bs);
@@ -109,42 +84,6 @@ public class MongoDBQueryEngine implements RyaQueryEngine<StatefulMongoDBRdfConf
             throw new RyaDAOException(e);
         }
 
-    }
-    @Override
-    public CloseableIteration<RyaStatement, RyaDAOException> batchQuery(
-            final Collection<RyaStatement> stmts, final StatefulMongoDBRdfConfiguration conf)
-            throws RyaDAOException {
-        final Map<RyaStatement, BindingSet> queries = new HashMap<>();
-
-        for (final RyaStatement stmt : stmts) {
-            queries.put(stmt, new MapBindingSet());
-        }
-
-        return new RyaStatementCursorIterator(queryWithBindingSet(queries.entrySet(), conf));
-    }
-
-    @Override
-    public CloseableIterable<RyaStatement> query(final RyaQuery ryaQuery)
-            throws RyaDAOException {
-        Preconditions.checkNotNull(ryaQuery);
-
-        return query(new BatchRyaQuery(Collections.singleton(ryaQuery.getQuery())));
-    }
-
-    @Override
-    public CloseableIterable<RyaStatement> query(final BatchRyaQuery batchRyaQuery)
-            throws RyaDAOException {
-        Preconditions.checkNotNull(batchRyaQuery);
-
-        final Map<RyaStatement, BindingSet> queries = new HashMap<>();
-
-        for (final RyaStatement stmt : batchRyaQuery.getQueries()) {
-            queries.put(stmt, new MapBindingSet());
-        }
-
-        @SuppressWarnings("resource")
-        final Iterator<RyaStatement> iterator = new RyaStatementCursorIterator(queryWithBindingSet(queries.entrySet(), getConf()));
-        return CloseableIterables.wrap(() -> iterator);
     }
 
     private MongoCollection<Document> getCollection(final StatefulMongoDBRdfConfiguration conf) {

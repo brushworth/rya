@@ -8,9 +8,9 @@ package org.apache.rya.api.persist.query.join;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -20,8 +20,9 @@ package org.apache.rya.api.persist.query.join;
  */
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
-import org.apache.rya.api.RdfCloudTripleStoreUtils;
 import org.apache.rya.api.domain.RyaIRI;
 import org.apache.rya.api.domain.RyaResource;
 import org.apache.rya.api.domain.RyaStatement;
@@ -34,8 +35,6 @@ import org.eclipse.rdf4j.common.iteration.CloseableIteration;
 import org.eclipse.rdf4j.common.iteration.ConvertingIteration;
 import org.eclipse.rdf4j.query.BindingSet;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Map;
 
 /**
@@ -117,7 +116,7 @@ public class IterativeJoin<C extends RdfCloudTripleStoreConfiguration> implement
     }
 
     protected CloseableIteration<RyaResource, RyaDAOException> join(final CloseableIteration<RyaResource, RyaDAOException> iteration,
-                                                               final Map.Entry<RyaIRI, RyaValue> predObj) {
+                                                                    final Map.Entry<RyaIRI, RyaValue> predObj) {
         // TODO: configure batch
         // TODO: batch = 1, does not work
         final int batch = 100;
@@ -154,10 +153,10 @@ public class IterativeJoin<C extends RdfCloudTripleStoreConfiguration> implement
                 if (!iteration.hasNext()) {
                     return false;
                 }
-                Collection<Map.Entry<RyaStatement, BindingSet>> batchedResults = new ArrayList<>();
+                SetMultimap<RyaStatement, BindingSet> batchedResults = HashMultimap.create();
                 for (int i = 0; i < batch && iteration.hasNext(); i++) {
-                    batchedResults.add(new RdfCloudTripleStoreUtils.CustomEntry<>(
-                            new RyaStatement(iteration.next(), predObj.getKey(), predObj.getValue()), null));
+                    batchedResults.put(
+                            new RyaStatement(iteration.next(), predObj.getKey(), predObj.getValue()), null);
                 }
                 query = ryaQueryEngine.queryWithBindingSet(batchedResults, null);
                 return query.hasNext();
@@ -208,11 +207,11 @@ public class IterativeJoin<C extends RdfCloudTripleStoreConfiguration> implement
                 if (!iteration.hasNext()) {
                     return false;
                 }
-                Collection<Map.Entry<RyaStatement, BindingSet>> batchedResults = new ArrayList<>();
+                SetMultimap<RyaStatement, BindingSet> batchedResults = HashMultimap.create();
                 for (int i = 0; i < batch && iteration.hasNext(); i++) {
                     RyaStatement next = iteration.next();
-                    batchedResults.add(new RdfCloudTripleStoreUtils.CustomEntry<>(
-                            new RyaStatement(next.getSubject(), pred, next.getObject()), null));
+                    batchedResults.put(
+                            new RyaStatement(next.getSubject(), pred, next.getObject()), null);
                 }
                 query = ryaQueryEngine.queryWithBindingSet(batchedResults, null);
                 return query.hasNext();

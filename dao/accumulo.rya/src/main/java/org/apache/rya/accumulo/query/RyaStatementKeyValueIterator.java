@@ -19,15 +19,19 @@ package org.apache.rya.accumulo.query;
  * under the License.
  */
 
+import org.apache.accumulo.core.client.BatchScanner;
+import org.apache.accumulo.core.client.ScannerBase;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.rya.api.RdfCloudTripleStoreConstants.TABLE_LAYOUT;
+import org.apache.rya.api.RdfCloudTripleStoreUtils;
 import org.apache.rya.api.domain.RyaStatement;
 import org.apache.rya.api.persist.RyaDAOException;
 import org.apache.rya.api.resolver.RyaTripleContext;
 import org.apache.rya.api.resolver.triple.TripleRow;
 import org.apache.rya.api.resolver.triple.TripleRowResolverException;
-import org.eclipse.rdf4j.common.iteration.CloseableIteration;
+import org.eclipse.rdf4j.query.BindingSet;
+import org.eclipse.rdf4j.query.algebra.evaluation.QueryBindingSet;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -36,12 +40,20 @@ import java.util.Map;
  * Date: 7/17/12
  * Time: 11:48 AM
  */
-@Deprecated
-public class RyaStatementKeyValueIterator implements CloseableIteration<RyaStatement, RyaDAOException> {
+public class RyaStatementKeyValueIterator implements RyaKeyValueIterator {
+    private final QueryBindingSet QBS = new QueryBindingSet(0);
     private Iterator<Map.Entry<Key, Value>> dataIterator;
     private TABLE_LAYOUT tableLayout;
     private Long maxResults = -1L;
+    private ScannerBase scanner;
+    private boolean isBatchScanner;
     private RyaTripleContext context;
+
+    public RyaStatementKeyValueIterator(TABLE_LAYOUT tableLayout, RyaTripleContext context, ScannerBase scannerBase) {
+        this(tableLayout, context, scannerBase.iterator());
+        this.scanner = scannerBase;
+        isBatchScanner = scanner instanceof BatchScanner;
+    }
 
     public RyaStatementKeyValueIterator(TABLE_LAYOUT tableLayout, RyaTripleContext context, Iterator<Map.Entry<Key, Value>> dataIterator) {
         this.tableLayout = tableLayout;
@@ -52,8 +64,12 @@ public class RyaStatementKeyValueIterator implements CloseableIteration<RyaState
     @Override
     public void close() throws RyaDAOException {
         dataIterator = null;
+        if (scanner != null && isBatchScanner) {
+            scanner.close();
+        }
     }
 
+    @Override
     public boolean isClosed() throws RyaDAOException {
         return dataIterator == null;
     }
@@ -67,7 +83,7 @@ public class RyaStatementKeyValueIterator implements CloseableIteration<RyaState
     }
 
     @Override
-    public RyaStatement next() throws RyaDAOException {
+    public Map.Entry<RyaStatement, BindingSet> next() throws RyaDAOException {
         if (!hasNext()) {
             return null;
         }
@@ -82,7 +98,7 @@ public class RyaStatementKeyValueIterator implements CloseableIteration<RyaState
                 statement.setValue(next.getValue().get());
             }
             maxResults--;
-            return statement;
+            return new RdfCloudTripleStoreUtils.CustomEntry<>(statement, QBS);
         } catch (TripleRowResolverException e) {
             throw new RyaDAOException(e);
         }
@@ -93,10 +109,12 @@ public class RyaStatementKeyValueIterator implements CloseableIteration<RyaState
         next();
     }
 
+    @Override
     public Long getMaxResults() {
         return maxResults;
     }
 
+    @Override
     public void setMaxResults(Long maxResults) {
         this.maxResults = maxResults;
     }

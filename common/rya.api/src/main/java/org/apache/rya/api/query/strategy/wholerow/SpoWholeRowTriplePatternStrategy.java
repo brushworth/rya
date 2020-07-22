@@ -51,7 +51,7 @@ public class SpoWholeRowTriplePatternStrategy extends AbstractTriplePatternStrat
 
     @Override
     public ByteRange defineRange(final RyaResource subject, final RyaIRI predicate, final RyaValue object,
-                                                          final RyaResource context, final RdfCloudTripleStoreConfiguration conf) throws IOException {
+                                 final RyaResource context, final RdfCloudTripleStoreConfiguration conf) throws IOException {
         try {
             //spo(ng)
             //sp(ng)
@@ -120,6 +120,22 @@ public class SpoWholeRowTriplePatternStrategy extends AbstractTriplePatternStrat
         } catch (final RyaTypeResolverException e) {
             throw new IOException(e);
         }
+    }
+
+    @Override
+    public byte[] defineExact(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context, RdfCloudTripleStoreConfiguration conf) throws IOException {
+        if (subject != null && predicate != null && object != null && !(object instanceof RyaRange)) {
+            try {
+                final RyaContext ryaContext = RyaContext.getInstance();
+                final byte[][] objectBytesArray = ryaContext.serializeType(object);
+                final byte[] objBytes = objectBytesArray[0];
+                final byte[] objTypeBytes = objectBytesArray[1];
+                return Bytes.concat(subject.getData().getBytes(StandardCharsets.UTF_8), DELIM_BYTES, predicate.getData().getBytes(StandardCharsets.UTF_8), DELIM_BYTES, objBytes, objTypeBytes);
+            } catch (RyaTypeResolverException e) {
+                throw new IOException(e);
+            }
+        }
+        return null;
     }
 
     @Override

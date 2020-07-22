@@ -19,14 +19,7 @@ package org.apache.rya.joinselect;
  * under the License.
  */
 
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
+import com.google.common.collect.Lists;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -60,7 +53,13 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.google.common.collect.Lists;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class AccumuloSelectivityEvalDAOTest {
 
@@ -123,7 +122,6 @@ public class AccumuloSelectivityEvalDAOTest {
         arc = new AccumuloRdfConfiguration();
         res = new ProspectorServiceEvalStatsDAO(conn, arc);
         arc.setTableLayoutStrategy(new TablePrefixLayoutStrategy());
-        arc.setMaxRangesForScanner(300);
 
     }
 

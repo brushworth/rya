@@ -18,15 +18,19 @@
  */
 package org.apache.rya.api.query.strategy;
 
-import static org.apache.rya.api.RdfCloudTripleStoreConstants.DELIM;
-import static org.apache.rya.api.RdfCloudTripleStoreConstants.TYPE_DELIM;
-
-import java.nio.charset.StandardCharsets;
-
+import com.google.common.base.Preconditions;
+import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
 import org.apache.rya.api.RdfCloudTripleStoreConstants;
+import org.apache.rya.api.domain.RyaIRI;
+import org.apache.rya.api.domain.RyaResource;
+import org.apache.rya.api.domain.RyaValue;
 import org.apache.rya.api.resolver.triple.TripleRowRegex;
 
-import com.google.common.base.Preconditions;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+import static org.apache.rya.api.RdfCloudTripleStoreConstants.DELIM;
+import static org.apache.rya.api.RdfCloudTripleStoreConstants.TYPE_DELIM;
 
 /**
  * Date: 7/14/12
@@ -36,7 +40,14 @@ public abstract class AbstractTriplePatternStrategy implements TriplePatternStra
     public static final String ALL_REGEX = "([\\s\\S]*)";
 
     @Override
-    public abstract RdfCloudTripleStoreConstants.TABLE_LAYOUT getLayout();
+    public byte[] defineExact(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context, RdfCloudTripleStoreConfiguration conf) throws IOException {
+        return null;
+    }
+
+    @Override
+    public byte[] defineColumn(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context, RdfCloudTripleStoreConfiguration conf) {
+        return context != null ? context.getData().getBytes(StandardCharsets.UTF_8): null;
+    }
 
     @Override
     public TripleRowRegex buildRegex(final String subject, final String predicate, final String object, final String context, final byte[] objectTypeInfo) {

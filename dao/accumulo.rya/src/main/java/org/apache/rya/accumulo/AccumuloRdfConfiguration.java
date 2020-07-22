@@ -18,13 +18,8 @@
  */
 package org.apache.rya.accumulo;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Properties;
-
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.security.Authorizations;
@@ -32,8 +27,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.rya.accumulo.experimental.AccumuloIndexer;
 import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
 
 public class AccumuloRdfConfiguration extends RdfCloudTripleStoreConfiguration {
 
@@ -300,14 +299,6 @@ public class AccumuloRdfConfiguration extends RdfCloudTripleStoreConfiguration {
             return AccumuloRdfConstants.ALL_AUTHORIZATIONS;
         }
         return new Authorizations(auths);
-    }
-
-    public void setMaxRangesForScanner(final Integer max) {
-        setInt(MAXRANGES_SCANNER, max);
-    }
-
-    public Integer getMaxRangesForScanner() {
-        return getInt(MAXRANGES_SCANNER, 2);
     }
 
     public void setAdditionalIndexers(final Class<? extends AccumuloIndexer>... indexers) {

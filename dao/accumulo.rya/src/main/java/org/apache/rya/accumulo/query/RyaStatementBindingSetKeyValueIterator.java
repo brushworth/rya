@@ -19,15 +19,11 @@ package org.apache.rya.accumulo.query;
  * under the License.
  */
 
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-
-import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.ScannerBase;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.rya.api.RdfCloudTripleStoreConstants.TABLE_LAYOUT;
 import org.apache.rya.api.RdfCloudTripleStoreUtils;
 import org.apache.rya.api.domain.RyaStatement;
@@ -35,46 +31,49 @@ import org.apache.rya.api.persist.RyaDAOException;
 import org.apache.rya.api.resolver.RyaTripleContext;
 import org.apache.rya.api.resolver.triple.TripleRow;
 import org.apache.rya.api.resolver.triple.TripleRowResolverException;
-import org.eclipse.rdf4j.common.iteration.CloseableIteration;
 import org.eclipse.rdf4j.query.BindingSet;
+
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * Date: 7/17/12
  * Time: 11:48 AM
  */
-public class RyaStatementBindingSetKeyValueIterator implements CloseableIteration<Map.Entry<RyaStatement, BindingSet>, RyaDAOException> {
+public class RyaStatementBindingSetKeyValueIterator implements RyaKeyValueIterator {
+    private static final Log logger = LogFactory.getLog(RyaStatementBindingSetKeyValueIterator.class);
     private Iterator<Map.Entry<Key, Value>> dataIterator;
     private TABLE_LAYOUT tableLayout;
     private Long maxResults = -1L;
     private ScannerBase scanner;
-    private boolean isBatchScanner;
     private RangeBindingSetEntries rangeMap;
     private Iterator<BindingSet> bsIter;
     private RyaStatement statement;
 	private RyaTripleContext ryaContext;
 
-    public RyaStatementBindingSetKeyValueIterator(TABLE_LAYOUT tableLayout, RyaTripleContext context, ScannerBase scannerBase, RangeBindingSetEntries rangeMap) {
-        this(tableLayout, ((scannerBase instanceof BatchScanner) ? scannerBase.iterator() : scannerBase
-                .iterator()), rangeMap, context);
-        this.scanner = scannerBase;
-        isBatchScanner = scanner instanceof BatchScanner;
+    public RyaStatementBindingSetKeyValueIterator(TABLE_LAYOUT tableLayout, RyaTripleContext context, ScannerBase scanner, RangeBindingSetEntries rangeMap) {
+        this(tableLayout, context, scanner.iterator(), rangeMap);
+        this.scanner = scanner;
     }
 
-    public RyaStatementBindingSetKeyValueIterator(TABLE_LAYOUT tableLayout, Iterator<Map.Entry<Key, Value>> dataIterator, RangeBindingSetEntries rangeMap, RyaTripleContext ryaContext) {
+    public RyaStatementBindingSetKeyValueIterator(TABLE_LAYOUT tableLayout, RyaTripleContext ryaContext, Iterator<Map.Entry<Key, Value>> dataIterator, RangeBindingSetEntries rangeMap) {
         this.tableLayout = tableLayout;
-        this.rangeMap = rangeMap;
-        this.dataIterator = dataIterator;
         this.ryaContext = ryaContext;
+        this.dataIterator = dataIterator;
+        this.rangeMap = rangeMap;
     }
 
     @Override
     public void close() throws RyaDAOException {
         dataIterator = null;
-        if (scanner != null && isBatchScanner) {
+        if (scanner != null) {
             scanner.close();
         }
     }
 
+    @Override
     public boolean isClosed() throws RyaDAOException {
         return dataIterator == null;
     }
@@ -108,7 +107,7 @@ public class RyaStatementBindingSetKeyValueIterator implements CloseableIteratio
             while (true) {
                 if (bsIter != null && bsIter.hasNext()) {
                     maxResults--;
-                    return new RdfCloudTripleStoreUtils.CustomEntry<RyaStatement, BindingSet>(statement, bsIter.next());
+                    return new RdfCloudTripleStoreUtils.CustomEntry<>(statement, bsIter.next());
                 }
 
                 if (dataIterator.hasNext()) {
@@ -123,6 +122,8 @@ public class RyaStatementBindingSetKeyValueIterator implements CloseableIteratio
                     Collection<BindingSet> bindingSets = rangeMap.containsKey(key);
                     if (!bindingSets.isEmpty()) {
                         bsIter = bindingSets.iterator();
+                    } else {
+                        bsIter = null;
                     }
                 } else {
                     break;
@@ -139,10 +140,12 @@ public class RyaStatementBindingSetKeyValueIterator implements CloseableIteratio
         next();
     }
 
+    @Override
     public Long getMaxResults() {
         return maxResults;
     }
 
+    @Override
     public void setMaxResults(Long maxResults) {
         this.maxResults = maxResults;
     }

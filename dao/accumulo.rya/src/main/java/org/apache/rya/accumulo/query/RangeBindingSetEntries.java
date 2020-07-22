@@ -45,10 +45,28 @@ public class RangeBindingSetEntries {
         ranges.put(range, bs);
     }
 
+    public Set<Range> keySet() {
+        return ranges.keySet();
+    }
+
+    public Collection<BindingSet> get(Range range) {
+        return ranges.get(range);
+    }
+
+    public boolean hasBindingSet() {
+        for (BindingSet bs : ranges.values()) {
+            if (bs != null && bs.size() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * This method is used to see if a returned {@link Key}/{@link Value} pair is represented by a particular scan range.
      * We need to expand upon the default Accumulo behavior by checking not just the row but also the column.
      * This is very important when we are looking for specific context values (that are in the column family).
+     *
      * @param key The returned {@link Key} to be checked.
      * @return The relevant {@link BindingSet}s of the returned data from the input query.
      */
@@ -61,8 +79,9 @@ public class RangeBindingSetEntries {
             // validateContext(...) is necessary because range.contains(key)
             // returns true if only the Row is within the Range but the ColumnFamily
             // doesn't fall within the Range ColumnFamily bounds.
-            if (range.contains(key) && validateContext(key.getColumnFamily(), range.getStartKey().getColumnFamily(),
-                    range.getEndKey().getColumnFamily())) {
+            // Don't bother checking if there are no BindingSets to be added.
+            if (!ranges.get(range).isEmpty() && range.contains(key) &&
+                    validateContext(key.getColumnFamily(), range.getStartKey().getColumnFamily(), range.getEndKey().getColumnFamily())) {
                 bsSet.addAll(ranges.get(range));
             }
         }
@@ -70,7 +89,6 @@ public class RangeBindingSetEntries {
     }
 
     /**
-     * 
      * @param colFamily
      * @param startColFamily
      * @param stopColFamily

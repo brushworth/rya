@@ -19,15 +19,7 @@ package org.apache.rya.rdftriplestore.evaluation;
  * under the License.
  */
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import com.google.common.collect.Lists;
 import org.apache.log4j.Logger;
 import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
 import org.apache.rya.api.RdfCloudTripleStoreUtils;
@@ -64,7 +56,14 @@ import org.eclipse.rdf4j.query.algebra.evaluation.impl.StrictEvaluationStrategy;
 import org.eclipse.rdf4j.query.algebra.evaluation.iterator.FilterIterator;
 import org.eclipse.rdf4j.query.algebra.evaluation.iterator.JoinIterator;
 
-import com.google.common.collect.Lists;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  */
@@ -80,7 +79,7 @@ public class ParallelEvaluationStrategyImpl extends StrictEvaluationStrategy {
     public ParallelEvaluationStrategyImpl(StoreTripleSource tripleSource, InferenceEngine inferenceEngine,
                                           Dataset dataset, RdfCloudTripleStoreConfiguration conf) {
         super(tripleSource, dataset, null);
-        Integer nthreads = conf.getNumThreads();
+        Integer nthreads = conf.getNumThreads(); // TODO: Num threads for Accumulo is quite different from num threads for CPU work
         this.numOfThreads = (nthreads != null) ? nthreads : this.numOfThreads;
         Boolean val = conf.isPerformant();
         this.performant = (val != null) ? val : this.performant;

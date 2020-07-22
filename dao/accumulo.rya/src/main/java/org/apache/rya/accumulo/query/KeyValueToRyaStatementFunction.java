@@ -19,8 +19,6 @@ package org.apache.rya.accumulo.query;
  * under the License.
  */
 
-import java.util.Map;
-
 import com.google.common.base.Function;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
@@ -29,6 +27,8 @@ import org.apache.rya.api.domain.RyaStatement;
 import org.apache.rya.api.resolver.RyaTripleContext;
 import org.apache.rya.api.resolver.triple.TripleRow;
 import org.apache.rya.api.resolver.triple.TripleRowResolverException;
+
+import java.util.Map;
 
 /**
  * Date: 1/30/13
@@ -48,7 +48,7 @@ public class KeyValueToRyaStatementFunction implements Function<Map.Entry<Key, V
     public RyaStatement apply(Map.Entry<Key, Value> input) {
         Key key = input.getKey();
         Value value = input.getValue();
-        RyaStatement statement = null;
+        RyaStatement statement;
         try {
             statement = context.deserializeTriple(tableLayout,
                     new TripleRow(key.getRowData().toArray(),

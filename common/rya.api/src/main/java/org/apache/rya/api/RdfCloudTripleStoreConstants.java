@@ -18,17 +18,18 @@
  */
 package org.apache.rya.api;
 
-import java.nio.charset.StandardCharsets;
-
 import org.apache.hadoop.io.Text;
+import org.apache.rya.api.domain.RyaIRI;
 import org.apache.rya.api.domain.RyaSchema;
 import org.apache.rya.api.domain.RyaType;
-import org.apache.rya.api.domain.RyaIRI;
+import org.apache.rya.api.domain.RyaValue;
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Literal;
 import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.ValueFactory;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+
+import java.nio.charset.StandardCharsets;
 
 public class RdfCloudTripleStoreConstants {
 
@@ -145,7 +146,7 @@ public class RdfCloudTripleStoreConstants {
     public static IRI RTS_VERSION_PREDICATE = VALUE_FACTORY.createIRI(NAMESPACE, "version");
     public static RyaIRI RTS_VERSION_PREDICATE_RYA = new RyaIRI(RTS_VERSION_PREDICATE.stringValue());
     public static final Value VERSION = VALUE_FACTORY.createLiteral("3.0.0");
-    public static RyaType VERSION_RYA = new RyaType(VERSION.stringValue());
+    public static RyaValue VERSION_RYA = new RyaType(VERSION.stringValue());
 
     public static String RYA_CONFIG_AUTH = "RYACONFIG";
 }

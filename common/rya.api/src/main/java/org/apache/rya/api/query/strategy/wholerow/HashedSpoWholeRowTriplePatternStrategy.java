@@ -91,7 +91,7 @@ public class HashedSpoWholeRowTriplePatternStrategy extends AbstractHashedTriple
                         //TODO: There must be a better way than creating multiple byte[]
                         final byte[] subjBytes = subject.getData().getBytes(StandardCharsets.UTF_8);
                         final byte[] hashSubj = Hex.encodeHexString(md.digest(subjBytes)).getBytes(StandardCharsets.UTF_8);
-                         final byte[] objBytes = ryaContext.serializeType(object)[0];
+                        final byte[] objBytes = ryaContext.serializeType(object)[0];
                         start = Bytes.concat(hashSubj, DELIM_BYTES, subjBytes, DELIM_BYTES, predicate.getData().getBytes(StandardCharsets.UTF_8), DELIM_BYTES, objBytes, TYPE_DELIM_BYTES);
                         stop = Bytes.concat(start, LAST_BYTES);
                     }
@@ -126,6 +126,25 @@ public class HashedSpoWholeRowTriplePatternStrategy extends AbstractHashedTriple
         } catch (final RyaTypeResolverException | NoSuchAlgorithmException e) {
             throw new IOException(e);
         }
+    }
+
+    @Override
+    public byte[] defineExact(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context, RdfCloudTripleStoreConfiguration conf) throws IOException {
+        if (subject != null && predicate != null && object != null && !(object instanceof RyaRange)) {
+            try {
+                final RyaContext ryaContext = RyaContext.getInstance();
+                final MessageDigest md = MessageDigest.getInstance("MD5");
+                final byte[] subjBytes = subject.getData().getBytes(StandardCharsets.UTF_8);
+                final byte[] hashSubj = Hex.encodeHexString(md.digest(subjBytes)).getBytes(StandardCharsets.UTF_8);
+                final byte[][] objectBytesArray = ryaContext.serializeType(object);
+                final byte[] objBytes = objectBytesArray[0];
+                final byte[] objTypeBytes = objectBytesArray[1];
+                return Bytes.concat(hashSubj, DELIM_BYTES, subjBytes, DELIM_BYTES, predicate.getData().getBytes(StandardCharsets.UTF_8), DELIM_BYTES, objBytes, objTypeBytes);
+            } catch (RyaTypeResolverException | NoSuchAlgorithmException e) {
+                throw new IOException(e);
+            }
+        }
+        return null;
     }
 
     @Override

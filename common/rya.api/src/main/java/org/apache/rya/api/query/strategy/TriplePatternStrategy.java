@@ -8,9 +8,9 @@ package org.apache.rya.api.query.strategy;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -19,16 +19,14 @@ package org.apache.rya.api.query.strategy;
  * under the License.
  */
 
-import java.io.IOException;
-import java.util.Map;
-
 import org.apache.rya.api.RdfCloudTripleStoreConfiguration;
 import org.apache.rya.api.RdfCloudTripleStoreConstants.TABLE_LAYOUT;
-import org.apache.rya.api.domain.RyaResource;
-import org.apache.rya.api.domain.RyaType;
 import org.apache.rya.api.domain.RyaIRI;
+import org.apache.rya.api.domain.RyaResource;
 import org.apache.rya.api.domain.RyaValue;
 import org.apache.rya.api.resolver.triple.TripleRowRegex;
+
+import java.io.IOException;
 
 /**
  * Date: 7/14/12
@@ -37,7 +35,13 @@ import org.apache.rya.api.resolver.triple.TripleRowRegex;
 public interface TriplePatternStrategy {
 
     ByteRange defineRange(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context,
-                                                          RdfCloudTripleStoreConfiguration conf) throws IOException;
+                          RdfCloudTripleStoreConfiguration conf) throws IOException;
+
+    byte[] defineExact(RyaResource subject, RyaIRI predicate, RyaValue object, RyaResource context,
+                       RdfCloudTripleStoreConfiguration conf) throws IOException;
+
+    byte[] defineColumn(final RyaResource subject, final RyaIRI predicate, final RyaValue object, final RyaResource context,
+                        RdfCloudTripleStoreConfiguration conf);
 
     TABLE_LAYOUT getLayout();
 

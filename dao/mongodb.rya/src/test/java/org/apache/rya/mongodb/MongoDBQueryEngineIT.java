@@ -18,8 +18,8 @@
  */
 package org.apache.rya.mongodb;
 
-import com.google.common.collect.Lists;
-import org.apache.rya.api.RdfCloudTripleStoreUtils;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import org.apache.rya.api.domain.RyaIRI;
 import org.apache.rya.api.domain.RyaStatement;
 import org.apache.rya.api.domain.RyaStatement.RyaStatementBuilder;
@@ -30,10 +30,6 @@ import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.query.BindingSet;
 import org.eclipse.rdf4j.query.impl.MapBindingSet;
 import org.junit.Test;
-
-import java.util.Collection;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import static org.junit.Assert.assertEquals;
 
@@ -104,8 +100,8 @@ public class MongoDBQueryEngineIT extends MongoRyaITBase {
             final MapBindingSet bs1 = new MapBindingSet();
             bs1.addBinding("foo", VF.createIRI("u:x"));
 
-            final Map.Entry<RyaStatement, BindingSet> e1 = new RdfCloudTripleStoreUtils.CustomEntry<>(s1, bs1);
-            final Collection<Entry<RyaStatement, BindingSet>> stmts1 = Lists.newArrayList(e1);
+            final SetMultimap<RyaStatement, BindingSet> stmts1 = HashMultimap.create();
+            stmts1.put(s1, bs1);
             assertEquals(1, size(engine.queryWithBindingSet(stmts1, conf)));
 
 
@@ -114,16 +110,17 @@ public class MongoDBQueryEngineIT extends MongoRyaITBase {
 
             final RyaStatement s2 = getStatement(null, null, "u:c");
 
-            final Map.Entry<RyaStatement, BindingSet> e2 = new RdfCloudTripleStoreUtils.CustomEntry<>(s2, bs2);
-
-            final Collection<Entry<RyaStatement, BindingSet>> stmts2 = Lists.newArrayList(e1, e2);
+            final SetMultimap<RyaStatement, BindingSet> stmts2 = HashMultimap.create();
+            stmts2.put(s1, bs1);
+            stmts2.put(s2, bs2);
             assertEquals(2, size(engine.queryWithBindingSet(stmts2, conf)));
 
 
-            final Map.Entry<RyaStatement, BindingSet> e3 = new RdfCloudTripleStoreUtils.CustomEntry<>(s2, bs1);
-            final Map.Entry<RyaStatement, BindingSet> e4 = new RdfCloudTripleStoreUtils.CustomEntry<>(s1, bs2);
-
-            final Collection<Entry<RyaStatement, BindingSet>> stmts3 = Lists.newArrayList(e1, e2, e3, e4);
+            final SetMultimap<RyaStatement, BindingSet> stmts3 = HashMultimap.create();
+            stmts3.put(s1, bs1);
+            stmts3.put(s2, bs2);
+            stmts3.put(s2, bs1);
+            stmts3.put(s1, bs2);
             assertEquals(4, size(engine.queryWithBindingSet(stmts3, conf)));
         } finally {
             dao.destroy();
@@ -149,17 +146,17 @@ public class MongoDBQueryEngineIT extends MongoRyaITBase {
             final MapBindingSet bs1 = new MapBindingSet();
             bs1.addBinding("foo", VF.createIRI("u:x"));
 
-            final Map.Entry<RyaStatement, BindingSet> e1 = new RdfCloudTripleStoreUtils.CustomEntry<>(s, bs1);
-            final Collection<Entry<RyaStatement, BindingSet>> stmts1 = Lists.newArrayList(e1);
+            final SetMultimap<RyaStatement, BindingSet> stmts1 = HashMultimap.create();
+            stmts1.put(s, bs1);
             assertEquals(2, size(engine.queryWithBindingSet(stmts1, conf)));
 
 
             final MapBindingSet bs2 = new MapBindingSet();
             bs2.addBinding("foo", VF.createIRI("u:y"));
 
-            final Map.Entry<RyaStatement, BindingSet> e2 = new RdfCloudTripleStoreUtils.CustomEntry<>(s, bs2);
-
-            final Collection<Entry<RyaStatement, BindingSet>> stmts2 = Lists.newArrayList(e1, e2);
+            final SetMultimap<RyaStatement, BindingSet> stmts2 = HashMultimap.create();
+            stmts2.put(s, bs1);
+            stmts2.put(s, bs2);
             assertEquals(4, size(engine.queryWithBindingSet(stmts2, conf)));
         } finally {
             dao.destroy();

@@ -18,10 +18,9 @@
  */
 package org.apache.rya.api;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.rya.api.domain.RyaIRI;
 import org.apache.rya.api.layout.TableLayoutStrategy;
@@ -29,9 +28,9 @@ import org.apache.rya.api.layout.TablePrefixLayoutStrategy;
 import org.apache.rya.api.persist.RdfEvalStatsDAO;
 import org.eclipse.rdf4j.query.algebra.evaluation.QueryOptimizer;
 
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Rdf triple store specific configuration
@@ -153,7 +152,7 @@ public abstract class RdfCloudTripleStoreConfiguration extends Configuration {
     }
 
     public Integer getNumThreads() {
-        return getInt(CONF_NUM_THREADS, 2);
+        return getInt(CONF_NUM_THREADS, 20);
     }
 
     public void setNumThreads(final Integer numThreads) {
