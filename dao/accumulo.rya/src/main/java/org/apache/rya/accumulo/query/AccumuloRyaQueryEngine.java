@@ -29,6 +29,7 @@ import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ScannerBase;
+import org.apache.accumulo.core.client.admin.Locations;
 import org.apache.accumulo.core.data.Column;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
@@ -74,7 +75,7 @@ public class AccumuloRyaQueryEngine implements RyaQueryEngine<AccumuloRdfConfigu
     private Connector connector;
     private RyaTripleContext ryaContext;
     private final Map<TABLE_LAYOUT, KeyValueToRyaStatementFunction> keyValueToRyaStatementFunctionMap = new HashMap<>();
-    
+
     public AccumuloRyaQueryEngine(Connector connector, AccumuloRdfConfiguration conf) {
         this.connector = connector;
         this.configuration = conf;
@@ -97,6 +98,7 @@ public class AccumuloRyaQueryEngine implements RyaQueryEngine<AccumuloRdfConfigu
         Long ttl = conf.getTtl();
         Long maxResults = conf.getLimit();
         Integer numThreads = conf.getNumThreads();
+        Integer batchSize = conf.getBatchSize();
 
         if (logger.isDebugEnabled()) {
             try {
@@ -188,21 +190,10 @@ public class AccumuloRyaQueryEngine implements RyaQueryEngine<AccumuloRdfConfigu
             String regexObject = conf.getRegexObject();
             TripleRowRegex tripleRowRegex = strategy.buildRegex(regexSubject, regexPredicate, regexObject, null, null);
 
-
+            logger.info("version5");
             RyaKeyValueIterator iterator;
-            if (columnFamilyQualifierRange.keySet().size() <= 1) {
-                // Only use a single BatchScanner if you are looking for a maximum of one column combination because
-                // BatchScanners cannot look for different columns in a set of ranges.
-                BatchScanner scanner = connector.createBatchScanner(table, authorizations, numThreads);
-                scanner.setRanges(new HashSet<>(columnFamilyQualifierRange.values())); // Deduplicate ranges
-                Pair<String, String> columns = columnFamilyQualifierRange.keySet().iterator().next();
-                fillScanner(scanner, columns, ttl, currentTime, tripleRowRegex, conf);
-                if (rangeMap.hasBindingSet()) {
-                    iterator = new RyaStatementBindingSetKeyValueIterator(layout, ryaContext, scanner, rangeMap);
-                } else {
-                    iterator = new RyaStatementKeyValueIterator(layout, ryaContext, scanner);
-                }
-            } else {
+            if (!conf.isPerformant()) {
+                logger.info("!conf.isPerformant()");
                 Iterator<Map.Entry<Key, Value>>[] iters = new Iterator[columnFamilyQualifierRange.size()];
                 int i = 0;
                 for (Pair<String, String> columns : columnFamilyQualifierRange.keySet()) {
@@ -216,10 +207,85 @@ public class AccumuloRyaQueryEngine implements RyaQueryEngine<AccumuloRdfConfigu
                     }
                 }
                 if (rangeMap.hasBindingSet()) {
+                    logger.info("RyaStatementBindingSetKeyValueIterator");
                     iterator = new RyaStatementBindingSetKeyValueIterator(layout, ryaContext, Iterators.concat(iters), rangeMap);
                 } else {
+                    logger.info("RyaStatementKeyValueIterator");
                     iterator = new RyaStatementKeyValueIterator(layout, ryaContext, Iterators.concat(iters));
                 }
+            } else if (stmts.keySet().size() <= numThreads && columnFamilyQualifierRange.keySet().size() <= 1) {
+                logger.info("columnFamilyQualifierRange.keySet().size() <= 1");
+                // Only use a single BatchScanner if you are looking for a maximum of one column combination because
+                // BatchScanners cannot look for different columns in a set of ranges.
+                BatchScanner scanner = connector.createBatchScanner(table, authorizations, numThreads);
+                scanner.setRanges(new HashSet<>(columnFamilyQualifierRange.values())); // Deduplicate ranges
+                Pair<String, String> columns = columnFamilyQualifierRange.keySet().iterator().next();
+                fillScanner(scanner, columns, ttl, currentTime, tripleRowRegex, conf);
+                if (rangeMap.hasBindingSet()) {
+                    logger.info("RyaStatementBindingSetKeyValueIterator");
+                    iterator = new RyaStatementBindingSetKeyValueIterator(layout, ryaContext, scanner, rangeMap);
+                } else {
+                    logger.info("RyaStatementKeyValueIterator");
+                    iterator = new RyaStatementKeyValueIterator(layout, ryaContext, scanner);
+                }
+            } else {
+                // Record where in the cluster the data we are looking for is stored
+                Locations locations;
+                try {
+                    locations = connector.tableOperations().locate(table, rangeMap.keySet());
+                } catch (UnsupportedOperationException e) {
+                    // The mock Accumulo doesn't support locality obviously
+                    locations = null;
+                }
+
+                // Record the number of servers in the cluster to optimise the query load
+                int numberServers = connector.instanceOperations().getTabletServers().size();
+                if (numberServers < 1) numberServers = 1;
+
+                // We need to reorganize our data structure to optimise the way we interact with Accumulo, for performance reasons.
+                // We need to keep track of BindingSets for RDF4J as our primary concern, so that is our top level key.
+                // Accumulo only allows you to configure a column family/qualifier for the whole BatchScanner, not per
+                // individual range, so we need to also partition our queries by column.
+                Map<BindingSet, SortedSetMultimap<Pair<String, String>, Range>> bindingSetMap = new HashMap<>();
+                for (Pair<String, String> columns : columnFamilyQualifierRange.keySet()) {
+                    logger.info("columns="+columns);
+                    SortedSet<Range> ranges = columnFamilyQualifierRange.get(columns);
+                    for (Range range : ranges) {
+                        //logger.info("range="+range);
+                        for (BindingSet bs : rangeMap.get(range)) {
+                            //logger.info("bs="+bs);
+                            SortedSetMultimap<Pair<String, String>, Range> multimap = bindingSetMap.getOrDefault(bs, TreeMultimap.create(Ordering.usingToString(), Ordering.natural()));
+                            multimap.put(columns, range);
+                            bindingSetMap.put(bs, multimap);
+                        }
+                    }
+                }
+
+                // Use a series of Scanners in single threads, although the data will be fetched early in a thread.
+                HashMap<ScannerBase, BindingSet> accumuloScanners = new HashMap<>(columnFamilyQualifierRange.size() * bindingSetMap.size());
+                HashMap<ScannerBase, Range> accumuloRanges = new HashMap<>(columnFamilyQualifierRange.size() * bindingSetMap.size());
+                for (Map.Entry<BindingSet, SortedSetMultimap<Pair<String, String>, Range>> bsEntry : bindingSetMap.entrySet()) {
+                    BindingSet bs = bsEntry.getKey();
+                    for (Map.Entry<Pair<String, String>, Range> mapEntry : bsEntry.getValue().entries()) {
+                        Pair<String, String> columns = mapEntry.getKey();
+                        Range range = mapEntry.getValue();
+                        Scanner scanner = connector.createScanner(table, authorizations);
+                        scanner.setRange(range);
+                        fillScanner(scanner, columns, ttl, currentTime, tripleRowRegex, conf);
+
+                        // Don't allow Accumulo scanner to start its own thread pool to read ahead. We want to use our own.
+                        scanner.setReadaheadThreshold(1);
+                        // Tell Accumulo to batch the same size as our overall batch size
+                        scanner.setBatchSize(batchSize);
+                        //logger.info("scanner.getReadaheadThreshold()="+scanner.getReadaheadThreshold());
+                        //logger.info("scanner.getBatchSize()="+scanner.getBatchSize());
+
+                        accumuloScanners.put(scanner, bs);
+                        accumuloRanges.put(scanner, range);
+                    }
+                }
+                //iterator = new RyaStatementBindingSetKeyValueIterator(layout, ryaContext, Iterators.concat(iters), rangeMap);
+                iterator = new RyaStatementBindingSetThreadPoolKeyValueIterator(conf, layout, ryaContext, accumuloScanners, accumuloRanges, locations, numberServers);
             }
 
             if (maxResults != null) {

@@ -22,14 +22,12 @@ package org.apache.rya.accumulo.query;
 import com.google.common.annotations.Beta;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterators;
-import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.ScannerBase;
 import org.apache.accumulo.core.client.admin.Locations;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.TabletId;
 import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.util.NamingThreadFactory;
 import org.apache.accumulo.core.util.Pair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -43,14 +41,14 @@ import org.apache.rya.api.resolver.triple.TripleRow;
 import org.apache.rya.api.resolver.triple.TripleRowResolverException;
 import org.eclipse.rdf4j.query.BindingSet;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -62,14 +60,13 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
 
     private static final Log logger = LogFactory.getLog(RyaStatementBindingSetThreadPoolKeyValueIterator.class);
 
-    private static final Map<String, ThreadPoolExecutor> threadPoolPerServer = new HashMap<>();
-
     private final TABLE_LAYOUT tableLayout;
     private final RyaTripleContext ryaContext;
     private final Map<ScannerBase, BindingSet> accumuloScanners;
-    private final HashSet<AccumuloFetcherRunnable> iteratorProcessingQueue;
+    private final AccumuloIteratorThreadPool threadPool;
+    private final Set<AccumuloFetcherRunnable> iteratorProcessingQueue;
     //private int iteratorProcessingQueueCount;
-    private final LinkedBlockingQueue<Pair<Map.Entry<Key, Value>, BindingSet>> accumuloDataQueue;
+    private final LinkedBlockingDeque<Pair<Map.Entry<Key, Value>, BindingSet>> accumuloDataQueue;
 
     private boolean closed = false;
     private int count = 0;
@@ -93,14 +90,13 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
         this.accumuloScanners = accumuloScanners;
 
         // Create a fixed-size bounded queue with a single thread for each Accumulo scanner
-        this.iteratorProcessingQueue = new HashSet<>();
+        this.iteratorProcessingQueue = Collections.newSetFromMap(new ConcurrentHashMap<>());
         //this.iteratorProcessingQueueCount = 0;
 
         // Don't allow unlimited memory, only take enough for a decent buffer
         Integer batchSize = conf.getBatchSize();
-        if (batchSize == null) batchSize = Constants.SCAN_BATCH_SIZE * numberServers;
-        this.accumuloDataQueue = new LinkedBlockingQueue<>();
-        logger.info("accumuloDataQueue.batchSize="+batchSize+" (now unlimited)");
+        this.accumuloDataQueue = new LinkedBlockingDeque<>(batchSize);
+        logger.info("accumuloDataQueue.batchSize="+batchSize);
 
         // Set the maximum number of results asked for in the query, if any
         if (conf.getLimit() != null) {
@@ -108,50 +104,41 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
         }
 
         // Use a thread for every disk in a typical Accumulo server, but no more than the Tomcat server can cope with
-        int numThreads = 15; //Math.min(conf.getNumThreads() / numberServers, conf.getNumDisksPerServer());
+        int numThreadsPerServer = Math.min(conf.getNumThreads(), conf.getNumThreadsPerServer());
+        threadPool = new AccumuloIteratorThreadPool(numThreadsPerServer);
 
         logger.info("Starting " + String.format("%6d", accumuloScanners.size()) + " scanners across " +
                 String.format("%4d", numberServers) + " servers using max " +
-                String.format("%5d", numThreads) + " threads per server [thread " + Thread.currentThread().getId() + "]");
+                String.format("%5d", numThreadsPerServer) + " threads per server [thread " + Thread.currentThread().getId() + "]");
 
         // Start up a thread pool of processes that will read data from Accumulo
         // and put it into a single data queue for the main thread to read from.
         // Maintain a separate thread pool for each Accumulo server, so not to overwhelm any particular server.
         // Synchronize this because more than one SPAQRL query can be executed in parallel, so avoid race conditions.
-        synchronized (threadPoolPerServer) {
-            // Get the keySet() here so we don't call the same scanner more than once.
-            for (Map.Entry<ScannerBase, BindingSet> entry : this.accumuloScanners.entrySet()) {
-                ScannerBase scanner = entry.getKey();
-                BindingSet bs = entry.getValue();
 
-                String tabletServerName = "default";
-                // If not a mock Accumulo instance
-                if (locations != null) {
-                    Range range = accumuloRanges.get(scanner);
-                    // Locate where in the cluster the data will be
-                    List<TabletId> tablets = locations.groupByRange().get(range);
-                    if (tablets != null && !tablets.isEmpty()) {
-                        TabletId tabletId = tablets.get(0);
-                        tabletServerName = locations.getTabletLocation(tabletId);
-                    }
+        // Get the keySet() here so we don't call the same scanner more than once.
+        for (Map.Entry<ScannerBase, BindingSet> entry : this.accumuloScanners.entrySet()) {
+            ScannerBase scanner = entry.getKey();
+            BindingSet bs = entry.getValue();
+
+            String tabletServerName = "default";
+            // If not a mock Accumulo instance
+            if (locations != null) {
+                Range range = accumuloRanges.get(scanner);
+                // Locate where in the cluster the data will be
+                List<TabletId> tablets = locations.groupByRange().get(range);
+                if (tablets != null && !tablets.isEmpty()) {
+                    TabletId tabletId = tablets.get(0);
+                    tabletServerName = locations.getTabletLocation(tabletId);
                 }
-
-                // Create the thread pool and set the maximum amount of threads per Accumulo server, if doesn't already exist
-                ThreadPoolExecutor threadPoolExecutor = threadPoolPerServer.getOrDefault(
-                        tabletServerName,
-                        new ThreadPoolExecutor(numThreads, numThreads,
-                                120L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
-                                new NamingThreadFactory("Iterator "+tabletServerName+" thread")));
-                threadPoolPerServer.put(tabletServerName, threadPoolExecutor);
-                logger.info("tabletServerName="+tabletServerName+" threadPoolExecutor="+threadPoolExecutor);
-
-                // Prepare work in thread pools
-                AccumuloFetcherRunnable fetcher = new AccumuloFetcherRunnable(scanner, bs);
-                iteratorProcessingQueue.add(fetcher);
-
-                // Execute the thread
-                threadPoolExecutor.execute(fetcher);
             }
+
+            // Prepare work in thread pools
+            AccumuloFetcherRunnable fetcher = new AccumuloFetcherRunnable(scanner, bs);
+            iteratorProcessingQueue.add(fetcher);
+
+            // Execute the thread
+            threadPool.execute(tabletServerName, fetcher);
         }
     }
 
@@ -168,6 +155,11 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
         for (ScannerBase scanner : accumuloScanners.keySet()) {
             scanner.close();
         }
+
+        threadPool.close();
+
+        accumuloDataQueue.clear();
+        iteratorProcessingQueue.clear();
     }
 
     public boolean isClosed() throws RyaDAOException {
@@ -199,7 +191,7 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
 
                 // Wait a small period of time for new data to become available (data can stop at any time)
                 //logger.info("accumuloDataQueue.poll()");
-                Pair<Map.Entry<Key, Value>, BindingSet> next = accumuloDataQueue.poll(waitTime, TimeUnit.MILLISECONDS);
+                Pair<Map.Entry<Key, Value>, BindingSet> next = accumuloDataQueue.pollFirst(1, TimeUnit.MILLISECONDS);
                 // poll() will return null if data is not yet available
                 if (next != null) {
                     //logger.info("accumuloDataQueue.poll()=" + next);
@@ -224,12 +216,20 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
                 //if (iteratorProcessingQueue.size() == 1) {
                 //    logger.info("iteratorProcessingQueue="+iteratorProcessingQueue.toString());
                 //}
-                if (iteratorProcessingQueue.size() < 1 && accumuloDataQueue.isEmpty()) {
+                if (iteratorProcessingQueue.isEmpty() && accumuloDataQueue.isEmpty()) {
                     // We're all done here
                     maxResults = 0L;
                     logger.info("Returning " + count + " statements (done) [thread " + Thread.currentThread().getId() + "]");
                     return false;
                 }
+
+                // TODO: This is a work-around for a bug
+//                if (threadPool.isIdle()) {
+//                    // We're all done here
+//                    maxResults = 0L;
+//                    logger.info("Returning " + count + " statements (idle) [thread " + Thread.currentThread().getId() + "]");
+//                    return false;
+//                }
 
             } while (true); // Waiting for data to be returned by Accumulo
         } catch (TripleRowResolverException e) {
@@ -284,7 +284,6 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
         private final BindingSet bs;
 
         private boolean interrupted;
-        private Thread thread;
 
         public AccumuloFetcherRunnable(final ScannerBase scanner, BindingSet bs) {
             this.scanner = scanner;
@@ -296,14 +295,13 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
         @Override
         public void run() {
             try {
-                thread = Thread.currentThread();
                 // Don't start scanner if we don't need the results anymore
-                if (!interrupted && !thread.isInterrupted()) {
+                if (!interrupted) {
                     // Start the iterator within the thread pool, to control the cluster load
                     Iterator<Map.Entry<Key, Value>> iterator = scanner.iterator();
                     //logger.info("scanner.iterator()");
 
-                    while (!interrupted && !thread.isInterrupted() && !isClosed() && iterator.hasNext()) {
+                    while (!interrupted && !isClosed() && iterator.hasNext()) {
                         Map.Entry<Key, Value> keyValue = iterator.next();
                         // put() will wait if necessary for the buffer to have space
                         //logger.info("iterator.next() having iteratorProcessingQueueCount=" + iteratorProcessingQueue.size());
@@ -311,20 +309,18 @@ public class RyaStatementBindingSetThreadPoolKeyValueIterator implements RyaKeyV
                         //logger.info("accumuloDataQueue.put()");
                     }
                 }
-            } catch(InterruptedException e){
+            } catch (InterruptedException e) {
                 logger.warn("InterruptedException on accumuloDataQueue", e);
             } finally {
                 scanner.close();
-                Preconditions.checkState(iteratorProcessingQueue.remove(this));
+                iteratorProcessingQueue.remove(this);
                 //iteratorProcessingQueueCount--;
-                logger.info("iteratorProcessingQueue.remove()");
+                //logger.info("iteratorProcessingQueue.remove()");
             }
         }
 
         public void interrupt() {
-            if (thread != null) {
-                thread.interrupt();
-            }
+            logger.warn("interrupt on accumuloDataQueue");
             interrupted = true;
             //scanner.close();
             //Preconditions.checkState(iteratorProcessingQueue.remove(this));

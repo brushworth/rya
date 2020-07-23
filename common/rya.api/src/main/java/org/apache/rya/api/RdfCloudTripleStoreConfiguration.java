@@ -42,6 +42,7 @@ public abstract class RdfCloudTripleStoreConfiguration extends Configuration {
     public static final String CONF_STARTTIME = "query.startTime";
     //    public static final String CONF_TIMEINDEXURIS = "query.timeindexuris";
     public static final String CONF_NUM_THREADS = "query.numthreads";
+    public static final String CONF_NUM_THREADS_PER_SERVER = "query.numthreadsperserver";
     public static final String CONF_PERFORMANT = "query.performant";
     public static final String CONF_INFER = "query.infer";
     public static final String CONF_USE_STATS = "query.usestats";
@@ -152,13 +153,23 @@ public abstract class RdfCloudTripleStoreConfiguration extends Configuration {
     }
 
     public Integer getNumThreads() {
-        return getInt(CONF_NUM_THREADS, 20);
+        return getInt(CONF_NUM_THREADS, 200);
     }
 
     public void setNumThreads(final Integer numThreads) {
         Preconditions.checkNotNull(numThreads);
         Preconditions.checkArgument(numThreads > 0, "numThreads must be greater than 0");
         setInt(CONF_NUM_THREADS, numThreads);
+    }
+
+    public Integer getNumThreadsPerServer() {
+        return getInt(CONF_NUM_THREADS_PER_SERVER, 30);
+    }
+
+    public void setNumThreadsPerServer(final Integer numThreads) {
+        Preconditions.checkNotNull(numThreads);
+        Preconditions.checkArgument(numThreads > 0, "numThreads must be greater than 0");
+        setInt(CONF_NUM_THREADS_PER_SERVER, numThreads);
     }
 
     public Boolean isPerformant() {
@@ -221,7 +232,7 @@ public abstract class RdfCloudTripleStoreConfiguration extends Configuration {
         if (val != null) {
             return Integer.valueOf(val);
         }
-        return null;
+        return 1000;
     }
 
     public void setBatchSize(final Long batchSize) {
