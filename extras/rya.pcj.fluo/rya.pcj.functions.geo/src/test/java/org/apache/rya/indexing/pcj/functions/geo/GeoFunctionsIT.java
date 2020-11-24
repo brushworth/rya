@@ -186,9 +186,9 @@ public class GeoFunctionsIT extends RyaExportITBase {
      * If you see this error: "Unknown Shape definition [POLYGON" ...
      * Then:
      * (from Solr docs:) the field definition needs the attribute
-     * spatialContextFactory="com.spatial4j.core.context.jts.JtsSpatialContextFactory"
+     * spatialContextFactory="org.locationtech.spatial4j.core.context.jts.JtsSpatialContextFactory"
      * or (this works) this system property must be set to :
-     * SpatialContextFactory=com.spatial4j.core.context.jts.JtsSpatialContextFactory
+     * SpatialContextFactory=org.locationtech.spatial4j.core.context.jts.JtsSpatialContextFactory
      * If you see:
      * java.lang.UnsupportedOperationException: Not supported due to licensing issues. Feel free to provide your own implementation by using something like JTS.
      * Then add a bit of code to replace the default one that comes with RDF4J:

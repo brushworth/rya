@@ -20,9 +20,9 @@ package org.eclipse.rdf4j.query.algebra.evaluation.function.geosparql;
 
 import java.io.IOException;
 
-import com.spatial4j.core.context.SpatialContext;
-import com.spatial4j.core.context.jts.JtsSpatialContext;
-import com.spatial4j.core.shape.Shape;
+import org.locationtech.spatial4j.core.context.SpatialContext;
+import org.locationtech.spatial4j.core.context.jts.JtsSpatialContext;
+import org.locationtech.spatial4j.core.shape.Shape;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.WKTWriter;
 
